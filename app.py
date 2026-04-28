@@ -32,8 +32,9 @@ elif is_vercel:
     # Vercel 无外部数据库时的降级方案（数据不持久，仅供演示）
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////tmp/filter_mgmt.db'
 else:
-    # 本地开发默认使用 SQLite
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///filter_mgmt.db'
+    # 本地开发 / 宝塔 Linux 部署：使用项目目录下的绝对路径，避免工作目录变化导致找不到数据库
+    db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'filter_mgmt.db')
+    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['JSON_AS_ASCII'] = False
