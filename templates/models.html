@@ -1,0 +1,302 @@
+{% extends "base.html" %}
+{% block title %}使用管理 - 物料效期管理系统{% endblock %}
+{% block page_title %}使用管理{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+    <div class="card-body d-flex justify-content-between align-items-center">
+        <div class="text-muted small mb-0">
+            <i class="bi bi-info-circle"></i> 登记物料的使用记录
+        </div>
+        <button class="btn btn-primary admin-only-btn" data-bs-toggle="modal" data-bs-target="#modelModal" onclick="openAddModal()">
+            <i class="bi bi-plus-lg"></i> 使用物料
+        </button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0" id="modelTable">
+                <thead>
+                    <tr>
+                        <th>物料编码</th>
+                        <th>物料型号</th>
+                        <th>使用工序</th>
+                        <th>使用位置</th>
+                        <th>已灭菌次数</th>
+                        <th>生产日期</th>
+                        <th>输入人</th>
+                        <th>到期报警接收人</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 模态框 -->
+<div class="modal fade" id="modelModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalTitle">使用物料</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editId">
+                <input type="hidden" id="lookupFilterId">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">物料编码 <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="filterCode" placeholder="输入编码后点击查询" oninput="onFilterCodeChange()">
+                            <button class="btn btn-outline-secondary" type="button" onclick="lookupFilter()">
+                                <i class="bi bi-search"></i> 查询
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">使用工序</label>
+                        <input type="text" class="form-control" id="filterProcessName" placeholder="可手动输入或查询自动填充">
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">已灭菌次数</label>
+                        <input type="number" class="form-control" id="currentSterilizationCount" placeholder="请输入已灭菌次数">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">使用位置</label>
+                        <input type="text" class="form-control" id="useLocation" placeholder="如：洗瓶车间A区">
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">生产日期</label>
+                        <input type="date" class="form-control" id="productionDate">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">输入人</label>
+                        <input type="text" class="form-control" id="operatorName" placeholder="输入人姓名">
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">到期报警接收人</label>
+                        <input type="text" class="form-control" id="receivers" placeholder="多个用逗号分隔">
+                    </div>
+                </div>
+                <div class="alert alert-light small mb-0" id="lookupMsg" style="display:none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="saveModel()">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let modelModal;
+$(document).ready(function() {
+    modelModal = new bootstrap.Modal(document.getElementById('modelModal'));
+    // 确保 currentUser 加载完成后再渲染表格
+    if (currentUser) {
+        loadModels();
+    } else {
+        $.get('/api/me').done(function(res) {
+            currentUser = res;
+            loadModels();
+        }).fail(function() {
+            window.location.href = '/login';
+        });
+    }
+});
+
+function canEditRow(item) {
+    if (!currentUser) return false;
+    if (currentUser.role === 'admin') return true;
+    const meName = (currentUser.real_name || currentUser.username || '').trim();
+    if (!meName) return false;
+    // 输入人匹配
+    if (item.operator && item.operator.trim() === meName) return true;
+    // 接收人列表匹配
+    if (item.receivers) {
+        const list = item.receivers.split(/[,，]/).map(s => s.trim()).filter(s => s);
+        if (list.includes(meName)) return true;
+    }
+    return false;
+}
+
+function getUsageAlertStatus(item) {
+    // 直接使用后端计算好的 status 字段
+    return {
+        isExpired: item.status === 'expired',
+        isWarning: item.status === 'warning'
+    };
+}
+
+function loadModels() {
+    $.get('/api/filters/usage_records', function(res) {
+        const tbody = $('#modelTable tbody');
+        tbody.empty();
+        if (res.length === 0) {
+            tbody.append('<tr><td colspan="9" class="text-center text-muted py-4">暂无数据</td></tr>');
+            return;
+        }
+        res.forEach(item => {
+            const processName = item.use_process_name || item.process_name || '-';
+            const editable = canEditRow(item);
+            const actionBtns = editable
+                ? `<button class="btn btn-sm btn-outline-primary" onclick="openEditModal(${item.id})">编辑</button>
+                   <button class="btn btn-sm btn-outline-danger" onclick="deleteModel(${item.id})">删除</button>`
+                : '<span class="text-muted">-</span>';
+            const alertStatus = getUsageAlertStatus(item);
+            const rowClass = alertStatus.isExpired ? 'table-danger' : (alertStatus.isWarning ? 'table-warning' : '');
+            const row = `
+                <tr class="${rowClass}">
+                    <td><strong>${item.code}</strong></td>
+                    <td>${item.model_name || '-'}</td>
+                    <td>${processName}</td>
+                    <td>${item.use_location || '-'}</td>
+                    <td>${item.current_sterilization_count}</td>
+                    <td>${item.production_date || '-'}</td>
+                    <td>${item.operator || '-'}</td>
+                    <td>${item.receivers || '-'}</td>
+                    <td>${actionBtns}</td>
+                </tr>
+            `;
+            tbody.append(row);
+        });
+    });
+}
+
+function onFilterCodeChange() {
+    $('#lookupFilterId').val('');
+}
+
+function lookupFilter() {
+    const code = $('#filterCode').val().trim();
+    if (!code) return;
+    $('#lookupMsg').hide();
+    $.get('/api/filters/lookup?code=' + encodeURIComponent(code), function(res) {
+        if (res.success && res.data) {
+            const d = res.data;
+            $('#lookupFilterId').val(d.id);
+            $('#filterProcessName').val(d.use_process_name || d.process_name || '');
+            // 已灭菌次数初始为空，不自动填充
+            $('#useLocation').val(d.use_location || '');
+            $('#productionDate').val(d.production_date || '');
+            $('#operatorName').val(d.operator || '');
+            $('#receivers').val(d.receivers || '');
+        }
+    }).fail(function(xhr) {
+        const msg = xhr.responseJSON ? xhr.responseJSON.message : '查询失败';
+        $('#lookupMsg').removeClass('alert-success alert-danger').addClass('alert-warning').text(msg).show();
+    });
+}
+
+function openAddModal() {
+    $('#modalTitle').text('使用物料');
+    $('#editId').val('');
+    $('#lookupFilterId').val('');
+    $('#filterCode').val('').prop('readonly', false);
+    $('#filterProcessName').val('');
+    $('#currentSterilizationCount').val('');
+    $('#useLocation').val('');
+    $('#productionDate').val('');
+    $('#operatorName').val('');
+    $('#receivers').val('');
+    $('#lookupMsg').hide();
+    modelModal.show();
+}
+
+function openEditModal(id) {
+    $.get('/api/filters/' + id, function(res) {
+        if (!res.success) return;
+        const item = res.data;
+        $('#modalTitle').text('编辑使用记录');
+        $('#editId').val(item.id);
+        $('#lookupFilterId').val(item.id);
+        $('#filterCode').val(item.code).prop('readonly', true);
+        $('#filterProcessName').val(item.use_process_name || item.process_name || '');
+        $('#currentSterilizationCount').val(item.current_sterilization_count !== null ? item.current_sterilization_count : '');
+        $('#useLocation').val(item.use_location || '');
+        $('#productionDate').val(item.production_date || '');
+        $('#operatorName').val(item.operator || '');
+        $('#receivers').val(item.receivers || '');
+        $('#lookupMsg').hide();
+        modelModal.show();
+    });
+}
+
+function saveModel() {
+    const editId = $('#editId').val();
+    const lookupId = $('#lookupFilterId').val();
+    const id = editId || lookupId;
+
+    if (!id) {
+        showToast('请先输入物料编码并点击查询', 'error');
+        return;
+    }
+
+    const data = {
+        code: $('#filterCode').val().trim(),
+        use_process_name: $('#filterProcessName').val().trim(),
+        current_sterilization_count: $('#currentSterilizationCount').val(),
+        use_location: $('#useLocation').val().trim(),
+        production_date: $('#productionDate').val(),
+        operator: $('#operatorName').val().trim(),
+        receivers: $('#receivers').val().trim(),
+        is_usage_record: true
+    };
+    if (!data.code) { showToast('请输入物料编码', 'error'); return; }
+
+    $.ajax({
+        url: `/api/filters/${id}`,
+        type: 'PUT',
+        contentType: 'application/json',
+        data: JSON.stringify(data),
+        success: function(res) {
+            if (res.success) {
+                showToast(editId ? '修改成功' : '登记成功');
+                modelModal.hide();
+                loadModels();
+            } else {
+                showToast(res.message, 'error');
+            }
+        },
+        error: function(xhr) {
+            const msg = xhr.responseJSON ? xhr.responseJSON.message : '操作失败';
+            showToast(msg, 'error');
+        }
+    });
+}
+
+function deleteModel(id) {
+    confirmDialog('确认删除此使用记录？', function() {
+        $.ajax({
+            url: `/api/filters/${id}`,
+            type: 'DELETE',
+            success: function(res) {
+                if (res.success) {
+                    showToast('删除成功');
+                    loadModels();
+                } else {
+                    showToast(res.message, 'error');
+                }
+            },
+            error: function(xhr) {
+                const msg = xhr.responseJSON ? xhr.responseJSON.message : '删除失败';
+                showToast(msg, 'error');
+            }
+        });
+    });
+}
+</script>
+{% endblock %}

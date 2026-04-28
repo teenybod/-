@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录 - 物料效期管理系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <style>
+        body {
+            background: linear-gradient(135deg, #1a237e 0%, #283593 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-card {
+            width: 100%;
+            max-width: 420px;
+            border: none;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+        .login-header {
+            background: linear-gradient(135deg, #1a237e 0%, #3949ab 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 16px 16px 0 0;
+            text-align: center;
+        }
+        .login-header h3 {
+            margin: 0;
+            font-weight: 600;
+        }
+        .login-body {
+            padding: 30px;
+            background: white;
+            border-radius: 0 0 16px 16px;
+        }
+        .form-control:focus {
+            border-color: #3949ab;
+            box-shadow: 0 0 0 0.2rem rgba(57, 73, 171, 0.25);
+        }
+        .btn-login {
+            background: linear-gradient(135deg, #1a237e 0%, #3949ab 100%);
+            border: none;
+            padding: 12px;
+            font-size: 1.05rem;
+        }
+        .btn-login:hover {
+            opacity: 0.9;
+        }
+        .login-tabs {
+            display: flex;
+            border-bottom: 1px solid #dee2e6;
+            margin-bottom: 20px;
+        }
+        .login-tab {
+            flex: 1;
+            text-align: center;
+            padding: 12px;
+            cursor: pointer;
+            color: #6c757d;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+            font-size: 0.95rem;
+        }
+        .login-tab.active {
+            color: #3949ab;
+            border-bottom-color: #3949ab;
+            font-weight: 600;
+        }
+        .login-tab:hover:not(.active) {
+            color: #495057;
+        }
+        .login-panel {
+            display: none;
+        }
+        .login-panel.active {
+            display: block;
+        }
+        #qrcode {
+            width: 200px;
+            height: 200px;
+            margin: 0 auto 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #qrcode img {
+            display: block;
+            margin: 0 auto;
+        }
+        .qrcode-placeholder {
+            width: 200px;
+            height: 200px;
+            background: #f8f9fa;
+            border: 2px dashed #dee2e6;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #adb5bd;
+        }
+        .feishu-tip {
+            text-align: center;
+            color: #6c757d;
+            font-size: 0.85rem;
+        }
+        .btn-feishu {
+            background: #3370ff;
+            border: none;
+            color: white;
+            padding: 12px;
+            font-size: 1.05rem;
+            width: 100%;
+        }
+        .btn-feishu:hover {
+            background: #2860e0;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <div class="login-header">
+            <i class="bi bi-funnel-fill fs-1 mb-2 d-block"></i>
+            <h3>物料效期管理系统</h3>
+            <small class="opacity-75">制药车间专用</small>
+        </div>
+        <div class="login-body">
+            <div class="login-tabs">
+                <div class="login-tab active" data-target="panel-password">
+                    <i class="bi bi-person-lock"></i> 账号密码
+                </div>
+                <div class="login-tab" data-target="panel-feishu">
+                    <i class="bi bi-qr-code-scan"></i> 飞书扫码
+                </div>
+            </div>
+
+            <!-- 账号密码登录 -->
+            <div class="login-panel active" id="panel-password">
+                <form id="loginForm">
+                    <div class="mb-3">
+                        <label class="form-label"><i class="bi bi-person"></i> 用户名</label>
+                        <input type="text" class="form-control" id="username" placeholder="请输入用户名" required>
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label"><i class="bi bi-lock"></i> 密码</label>
+                        <input type="password" class="form-control" id="password" placeholder="请输入密码" required>
+                    </div>
+                    <button type="submit" class="btn btn-login btn-primary w-100 text-white">
+                        <i class="bi bi-box-arrow-in-right"></i> 登 录
+                    </button>
+                </form>
+                <div class="alert alert-light mt-3 mb-0 text-center small text-muted">
+                    制药车间物料效期管理系统
+                </div>
+            </div>
+
+            <!-- 飞书扫码登录 -->
+            <div class="login-panel" id="panel-feishu">
+                <div id="qrcode">
+                    <div class="qrcode-placeholder">
+                        <i class="bi bi-qr-code fs-1 mb-2"></i>
+                        <span>点击生成二维码</span>
+                    </div>
+                </div>
+                <div class="text-center mb-3">
+                    <button type="button" class="btn btn-feishu" id="btnGenQR">
+                        <i class="bi bi-qr-code-scan"></i> 生成飞书登录二维码
+                    </button>
+                </div>
+                <p class="feishu-tip mb-0">
+                    <i class="bi bi-info-circle"></i> 请使用飞书 App 扫描二维码完成登录
+                </p>
+                <div id="feishuStatus" class="alert mt-3 mb-0 py-2 text-center small" style="display:none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script>
+        // 登录方式切换
+        $('.login-tab').on('click', function() {
+            $('.login-tab').removeClass('active');
+            $(this).addClass('active');
+            $('.login-panel').removeClass('active');
+            $('#' + $(this).data('target')).addClass('active');
+            // 停止轮询
+            if (window._feishuPollTimer) {
+                clearInterval(window._feishuPollTimer);
+                window._feishuPollTimer = null;
+            }
+        });
+
+        // 账号密码登录
+        $('#loginForm').on('submit', function(e) {
+            e.preventDefault();
+            const btn = $(this).find('button[type="submit"]');
+            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> 登录中...');
+            
+            $.ajax({
+                url: '/login',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    username: $('#username').val().trim(),
+                    password: $('#password').val()
+                }),
+                success: function(res) {
+                    if (res.success) {
+                        window.location.href = '/';
+                    }
+                },
+                error: function(xhr) {
+                    const msg = xhr.responseJSON ? xhr.responseJSON.message : '登录失败';
+                    alert(msg);
+                    btn.prop('disabled', false).html('<i class="bi bi-box-arrow-in-right"></i> 登 录');
+                }
+            });
+        });
+
+        // 飞书扫码登录
+        let currentFeishuState = null;
+        
+        $('#btnGenQR').on('click', function() {
+            const btn = $(this);
+            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> 生成中...');
+            $('#feishuStatus').hide();
+
+            $.ajax({
+                url: '/api/feishu/auth_url',
+                type: 'GET',
+                success: function(res) {
+                    if (!res.success) {
+                        showFeishuStatus(res.message || '生成失败', 'danger');
+                        btn.prop('disabled', false).html('<i class="bi bi-qr-code-scan"></i> 生成飞书登录二维码');
+                        return;
+                    }
+                    currentFeishuState = res.state;
+                    // 生成二维码
+                    $('#qrcode').empty();
+                    new QRCode(document.getElementById('qrcode'), {
+                        text: res.auth_url,
+                        width: 200,
+                        height: 200,
+                        colorDark: '#000000',
+                        colorLight: '#ffffff',
+                        correctLevel: QRCode.CorrectLevel.M
+                    });
+                    btn.prop('disabled', false).html('<i class="bi bi-arrow-clockwise"></i> 刷新二维码');
+                    showFeishuStatus('二维码已生成，请使用飞书 App 扫描', 'info');
+                    startFeishuPolling(res.state);
+                },
+                error: function(xhr) {
+                    const msg = xhr.responseJSON ? xhr.responseJSON.message : '网络错误';
+                    showFeishuStatus(msg, 'danger');
+                    btn.prop('disabled', false).html('<i class="bi bi-qr-code-scan"></i> 生成飞书登录二维码');
+                }
+            });
+        });
+
+        function showFeishuStatus(text, type) {
+            const el = $('#feishuStatus');
+            el.removeClass('alert-info alert-success alert-danger alert-warning')
+              .addClass('alert-' + type)
+              .text(text)
+              .show();
+        }
+
+        function startFeishuPolling(state) {
+            if (window._feishuPollTimer) {
+                clearInterval(window._feishuPollTimer);
+            }
+            let attempts = 0;
+            const maxAttempts = 180; // 约3分钟
+            window._feishuPollTimer = setInterval(function() {
+                attempts++;
+                if (attempts > maxAttempts) {
+                    clearInterval(window._feishuPollTimer);
+                    window._feishuPollTimer = null;
+                    showFeishuStatus('二维码已过期，请刷新重试', 'warning');
+                    return;
+                }
+                $.ajax({
+                    url: '/api/feishu/login_status?state=' + encodeURIComponent(state),
+                    type: 'GET',
+                    success: function(res) {
+                        if (res.status === 'success') {
+                            clearInterval(window._feishuPollTimer);
+                            window._feishuPollTimer = null;
+                            showFeishuStatus('登录成功，正在跳转...', 'success');
+                            window.location.href = '/';
+                        }
+                        // pending 状态继续轮询
+                    },
+                    error: function(xhr) {
+                        const data = xhr.responseJSON || {};
+                        if (data.message && data.message.indexOf('无效') !== -1) {
+                            clearInterval(window._feishuPollTimer);
+                            window._feishuPollTimer = null;
+                            showFeishuStatus('登录状态已失效，请刷新二维码', 'warning');
+                        }
+                    }
+                });
+            }, 2000);
+        }
+    </script>
+</body>
+</html>

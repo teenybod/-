@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block title %}工序管理 - 物料效期管理系统{% endblock %}
+{% block page_title %}工序管理{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+    <div class="card-body d-flex justify-content-between align-items-center">
+        <div class="text-muted small mb-0">
+            <i class="bi bi-info-circle"></i> 管理车间各工序，新增工序后可在物料型号中选择
+        </div>
+        <button class="btn btn-primary admin-only-btn" data-bs-toggle="modal" data-bs-target="#processModal" onclick="openAddModal()">
+            <i class="bi bi-plus-lg"></i> 新增工序
+        </button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0" id="processTable">
+                <thead>
+                    <tr>
+                        <th>工序名称</th>
+                        <th>描述</th>
+                        <th>创建时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="processModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalTitle">新增工序</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editId">
+                <div class="mb-3">
+                    <label class="form-label">工序名称 <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="processName" placeholder="如：洗瓶">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">描述</label>
+                    <input type="text" class="form-control" id="processDesc" placeholder="可选">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="saveProcess()">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let processModal;
+$(document).ready(function() {
+    processModal = new bootstrap.Modal(document.getElementById('processModal'));
+    loadProcesses();
+});
+
+function loadProcesses() {
+    $.get('/api/processes', function(res) {
+        const tbody = $('#processTable tbody');
+        tbody.empty();
+        if (res.length === 0) {
+            tbody.append('<tr><td colspan="4" class="text-center text-muted py-4">暂无数据</td></tr>');
+            return;
+        }
+        res.forEach(item => {
+            const row = `
+                <tr>
+                    <td><strong>${item.name}</strong></td>
+                    <td>${item.description || '-'}</td>
+                    <td>${item.created_at}</td>
+                    <td>
+                        <span class="admin-only-btn">
+                            <button class="btn btn-sm btn-outline-primary" onclick="openEditModal(${item.id})">编辑</button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteProcess(${item.id})">删除</button>
+                        </span>
+                    </td>
+                </tr>
+            `;
+            tbody.append(row);
+        });
+    });
+}
+
+function openAddModal() {
+    $('#modalTitle').text('新增工序');
+    $('#editId').val('');
+    $('#processName').val('');
+    $('#processDesc').val('');
+    processModal.show();
+}
+
+function openEditModal(id) {
+    $.get('/api/processes', function(res) {
+        const item = res.find(i => i.id === id);
+        if (!item) return;
+        $('#modalTitle').text('编辑工序');
+        $('#editId').val(item.id);
+        $('#processName').val(item.name);
+        $('#processDesc').val(item.description);
+        processModal.show();
+    });
+}
+
+function saveProcess() {
+    const id = $('#editId').val();
+    const data = {
+        name: $('#processName').val().trim(),
+        description: $('#processDesc').val().trim()
+    };
+    if (!data.name) { showToast('请输入工序名称', 'error'); return; }
+
+    const url = id ? `/api/processes/${id}` : '/api/processes';
+    const method = id ? 'PUT' : 'POST';
+
+    $.ajax({
+        url: url,
+        type: method,
+        contentType: 'application/json',
+        data: JSON.stringify(data),
+        success: function(res) {
+            if (res.success) {
+                showToast(id ? '修改成功' : '新增成功');
+                processModal.hide();
+                loadProcesses();
+            } else {
+                showToast(res.message, 'error');
+            }
+        },
+        error: function(xhr) {
+            const msg = xhr.responseJSON ? xhr.responseJSON.message : '操作失败';
+            showToast(msg, 'error');
+        }
+    });
+}
+
+function deleteProcess(id) {
+    confirmDialog('确认删除此工序？', function() {
+        $.ajax({
+            url: `/api/processes/${id}`,
+            type: 'DELETE',
+            success: function(res) {
+                if (res.success) {
+                    showToast('删除成功');
+                    loadProcesses();
+                } else {
+                    showToast(res.message, 'error');
+                }
+            },
+            error: function() { showToast('删除失败', 'error'); }
+        });
+    });
+}
+</script>
+{% endblock %}

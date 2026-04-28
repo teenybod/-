@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+{% block title %}预警看板 - 物料效期管理系统{% endblock %}
+{% block page_title %}预警看板{% endblock %}
+
+{% block content %}
+<div class="row g-3 mb-4">
+    <div class="col-md-3 col-6">
+        <div class="card stat-card info p-3">
+            <div class="text-muted small">物料总数</div>
+            <div class="fs-2 fw-bold" id="statTotal">0</div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card stat-card normal p-3">
+            <div class="text-muted small">正常使用</div>
+            <div class="fs-2 fw-bold text-success" id="statNormal">0</div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card stat-card warning p-3">
+            <div class="text-muted small">即将到期</div>
+            <div class="fs-2 fw-bold text-warning" id="statWarning">0</div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card stat-card expired p-3">
+            <div class="text-muted small">需立即更换</div>
+            <div class="fs-2 fw-bold text-danger" id="statExpired">0</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-12">
+        <div class="card p-3">
+            <div class="d-flex gap-2 flex-wrap">
+                <button class="btn btn-danger" onclick="sendFeishu(true)">
+                    <i class="bi bi-send-fill"></i> 推送飞书提醒
+                </button>
+                <button class="btn btn-outline-success" onclick="exportAlerts()">
+                    <i class="bi bi-file-earmark-excel"></i> 导出预警清单
+                </button>
+                <button class="btn btn-outline-primary" onclick="loadData()">
+                    <i class="bi bi-arrow-clockwise"></i> 刷新数据
+                </button>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- 需更换 -->
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-exclamation-triangle-fill"></i> 需立即更换</span>
+                <span class="badge bg-white text-danger" id="expiredCount">0</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0" id="expiredTable">
+                        <thead>
+                            <tr>
+                                <th>物料编码</th>
+                                <th>工序</th>
+                                <th>型号</th>
+                                <th>规格</th>
+                                <th>预警原因</th>
+                                <th>到期日期</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div class="p-4 text-center text-muted" id="expiredEmpty" style="display:none">
+                    <i class="bi bi-check-circle fs-1 text-success"></i>
+                    <p class="mt-2">暂无需要更换的物料</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 即将到期 -->
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-clock-fill"></i> 即将到期</span>
+                <span class="badge bg-white text-warning" id="warningCount">0</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0" id="warningTable">
+                        <thead>
+                            <tr>
+                                <th>物料编码</th>
+                                <th>工序</th>
+                                <th>型号</th>
+                                <th>规格</th>
+                                <th>预警原因</th>
+                                <th>到期日期</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div class="p-4 text-center text-muted" id="warningEmpty" style="display:none">
+                    <i class="bi bi-emoji-smile fs-1 text-success"></i>
+                    <p class="mt-2">暂无即将到期的物料</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function loadData() {
+    $.get('/api/alert_summary', function(res) {
+        $('#statTotal').text(res.counts.total);
+        $('#statNormal').text(res.counts.normal);
+        $('#statWarning').text(res.counts.warning);
+        $('#statExpired').text(res.counts.expired);
+
+        renderTable('expired', res.expired);
+        renderTable('warning', res.warning);
+    }).fail(function() {
+        showToast('数据加载失败', 'error');
+    });
+}
+
+function renderTable(type, items) {
+    const tbody = $(`#${type}Table tbody`);
+    const empty = $(`#${type}Empty`);
+    const count = $(`#${type}Count`);
+    tbody.empty();
+    count.text(items.length);
+
+    if (items.length === 0) {
+        empty.show();
+        $(`#${type}Table`).hide();
+        return;
+    }
+    empty.hide();
+    $(`#${type}Table`).show();
+
+    items.forEach(item => {
+        const row = `
+            <tr class="filter-row">
+                <td><strong>${item.code}</strong></td>
+                <td>${item.process_name}</td>
+                <td>${item.model_name}</td>
+                <td>${item.spec || '-'}</td>
+                <td><span class="badge ${type === 'expired' ? 'bg-danger' : 'bg-warning'}">${item.warnings[0]}</span></td>
+                <td>${item.expire_date || '-'}</td>
+            </tr>
+        `;
+        tbody.append(row);
+    });
+}
+
+function resetFilter(id) {
+    confirmDialog('确认更换此物料？系统将重置使用次数、灭菌次数和启用日期。', function() {
+        $.post(`/api/filters/${id}/reset`, function(res) {
+            if (res.success) {
+                showToast('物料更换成功，已重置计数');
+                loadData();
+            } else {
+                showToast(res.message, 'error');
+            }
+        }).fail(function() {
+            showToast('操作失败', 'error');
+        });
+    });
+}
+
+function sendFeishu(onlyAlert) {
+    const btn = event.target.closest('button');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 发送中...';
+
+    $.ajax({
+        url: '/api/send_feishu',
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ only_alert: onlyAlert }),
+        success: function(res) {
+            if (res.success) {
+                showToast(res.message);
+            } else {
+                showToast(res.message, 'error');
+            }
+        },
+        error: function(xhr) {
+            const msg = xhr.responseJSON ? xhr.responseJSON.message : '发送失败';
+            showToast(msg, 'error');
+        },
+        complete: function() {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-send-fill"></i> 推送飞书提醒';
+        }
+    });
+}
+
+function exportAlerts() {
+    window.open('/api/export/alerts', '_blank');
+}
+
+$(document).ready(function() {
+    loadData();
+});
+</script>
+{% endblock %}

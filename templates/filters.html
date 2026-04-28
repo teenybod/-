@@ -1,0 +1,432 @@
+{% extends "base.html" %}
+{% block title %}数据库 - 物料效期管理系统{% endblock %}
+{% block page_title %}数据库{% endblock %}
+
+{% block content %}
+<!-- 工具栏 -->
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-5">
+                <label class="form-label">搜索编码/型号</label>
+                <input type="text" class="form-control" id="searchInput" placeholder="输入物料编码或型号..." onkeyup="if(event.key==='Enter') loadFilters()">
+            </div>
+            <div class="col-md-7 text-md-end">
+                <button class="btn btn-outline-success" onclick="exportFilters()">
+                    <i class="bi bi-file-earmark-excel"></i> 导出清单
+                </button>
+                <button class="btn btn-outline-primary" onclick="syncFeishuBitable()">
+                    <i class="bi bi-arrow-repeat"></i> 同步飞书
+                </button>
+                <span class="admin-only-btn">
+                    <button class="btn btn-outline-info" onclick="importFilterModels()">
+                        <i class="bi bi-file-earmark-arrow-up"></i> 导入主数据
+                    </button>
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#filterModal" onclick="openAddModal()">
+                        <i class="bi bi-plus-lg"></i> 新增物料
+                    </button>
+                    <button class="btn btn-outline-danger" onclick="batchDeleteFilters()">
+                        <i class="bi bi-trash"></i> 一键删除
+                    </button>
+                </span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 数据表格 -->
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0" id="filterTable">
+                <thead>
+                    <tr>
+                        <th style="width:40px"><input type="checkbox" class="form-check-input" id="selectAll" onclick="toggleSelectAll()"></th>
+                        <th>物料编码</th>
+                        <th>型号</th>
+                        <th>规格</th>
+                        <th>可灭菌次数</th>
+                        <th>有效期（年）</th>
+                        <th style="min-width:140px">操作</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 新增/编辑模态框 -->
+<div class="modal fade" id="filterModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalTitle">新增物料</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editId">
+                <div class="mb-3">
+                    <label class="form-label">物料编码 <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="filterCode" placeholder="如：F-20240418-001">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">型号 <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="filterModelName" placeholder="如：0.22μm PES物料">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">规格</label>
+                    <input type="text" class="form-control" id="filterSpec" placeholder="如：10英寸、直径68mm">
+                </div>
+                <div class="row">
+                    <div class="col-6 mb-3">
+                        <label class="form-label">可灭菌次数</label>
+                        <input type="number" class="form-control" id="filterMaxSterilization" min="0" placeholder="0=不限">
+                    </div>
+                    <div class="col-6 mb-3">
+                        <label class="form-label">有效期（年）</label>
+                        <input type="number" class="form-control" id="filterMaxDays" min="0" step="0.1" placeholder="0=不限">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="saveFilter()">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 导入主数据模态框 -->
+<div class="modal fade" id="importModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">导入物料主数据</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">选择 Excel 文件 <span class="text-danger">*</span></label>
+                    <input type="file" class="form-control" id="importFile" accept=".xlsx,.xls">
+                    <div class="form-text">支持 <code>.xlsx</code> 格式，需包含「物料名称」「型号/规格」「有效期」列</div>
+                </div>
+                <div class="alert alert-light small mb-0">
+                    <i class="bi bi-info-circle"></i> 
+                    系统将自动识别表头，同名型号已存在则更新，不存在则创建。<br>
+                    有效期列单位为「年」。
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="doImportFilterModels()">
+                    <i class="bi bi-file-earmark-arrow-up"></i> 开始导入
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let models = [];
+let filterModal, importModal;
+
+$(document).ready(function() {
+    filterModal = new bootstrap.Modal(document.getElementById('filterModal'));
+    importModal = new bootstrap.Modal(document.getElementById('importModal'));
+    // 等待用户信息加载完成后再加载数据
+    function waitAndLoad() {
+        if (typeof currentUser !== 'undefined' && currentUser) {
+            loadModels().then(loadFilters);
+        } else {
+            setTimeout(waitAndLoad, 100);
+        }
+    }
+    waitAndLoad();
+});
+
+function loadModels() {
+    return $.get('/api/filter_models').then(function(res) {
+        models = res;
+    });
+}
+
+function syncFeishuBitable() {
+    const btn = event.target.closest('button');
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 同步中...';
+
+    $.ajax({
+        url: '/api/feishu/bitable/sync',
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({}),
+        success: function(res) {
+            if (res.success) {
+                showToast(res.message);
+                loadFilters();
+            } else {
+                showToast(res.message, 'error');
+            }
+        },
+        error: function(xhr) {
+            const msg = xhr.responseJSON ? xhr.responseJSON.message : '同步失败';
+            showToast(msg, 'error');
+        },
+        complete: function() {
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+        }
+    });
+}
+
+function loadFilters() {
+    const search = $('#searchInput').val().toLowerCase();
+    
+    $.get('/api/filters', function(res) {
+        const tbody = $('#filterTable tbody');
+        tbody.empty();
+        
+        let items = res;
+        if (search) {
+            items = items.filter(i => 
+                (i.code && i.code.toLowerCase().includes(search)) ||
+                (i.model_name && i.model_name.toLowerCase().includes(search)) ||
+                (i.spec && i.spec.toLowerCase().includes(search))
+            );
+        }
+
+        if (items.length === 0) {
+            tbody.append('<tr><td colspan="7" class="text-center text-muted py-4">暂无数据</td></tr>');
+            return;
+        }
+
+        items.forEach(item => {
+            let expireInfo = '-';
+            if (item.max_days !== null && item.max_days !== undefined && item.max_days > 0) {
+                const years = (item.max_days / 365).toFixed(1);
+                expireInfo = `${years}年`;
+            }
+
+            const isAdmin = checkAdmin && checkAdmin();
+
+            const row = `
+                <tr class="filter-row">
+                    <td>${isAdmin ? `<input type="checkbox" class="form-check-input filter-check" value="${item.id}">` : ''}</td>
+                    <td><strong>${item.code}</strong></td>
+                    <td>${item.model_name}</td>
+                    <td>${item.spec || '-'}</td>
+                    <td>${item.max_sterilization_count !== null && item.max_sterilization_count !== undefined ? item.max_sterilization_count : '-'}</td>
+                    <td>${expireInfo}</td>
+                    <td>
+                        ${isAdmin ? `
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-sm btn-outline-primary" onclick="openEditModal(${item.id})">编辑</button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="deleteFilter(${item.id})">删除</button>
+                            </div>
+                        ` : '-'}
+                    </td>
+                </tr>
+            `;
+            tbody.append(row);
+        });
+    });
+}
+
+function toggleSelectAll() {
+    if (!checkAdmin || !checkAdmin()) return;
+    const checked = $('#selectAll').prop('checked');
+    $('.filter-check').prop('checked', checked);
+}
+
+function getSelectedIds() {
+    const ids = [];
+    $('.filter-check:checked').each(function() {
+        ids.push(parseInt($(this).val()));
+    });
+    return ids;
+}
+
+function batchDeleteFilters() {
+    if (!checkAdmin || !checkAdmin()) {
+        showToast('权限不足，需要管理员权限', 'error');
+        return;
+    }
+    const ids = getSelectedIds();
+    if (ids.length === 0) {
+        showToast('请先勾选要删除的物料', 'error');
+        return;
+    }
+    confirmDialog(`确认删除选中的 ${ids.length} 条物料数据？相关记录也将被删除。`, function() {
+        let completed = 0;
+        let failed = 0;
+        ids.forEach(function(id) {
+            $.ajax({
+                url: `/api/filters/${id}`,
+                type: 'DELETE',
+                success: function(res) {
+                    if (res.success) completed++;
+                    else failed++;
+                },
+                error: function() { failed++; },
+                complete: function() {
+                    if (completed + failed === ids.length) {
+                        showToast(`删除完成：成功 ${completed} 条${failed > 0 ? '，失败 ' + failed + ' 条' : ''}`);
+                        loadFilters();
+                        $('#selectAll').prop('checked', false);
+                    }
+                }
+            });
+        });
+    });
+}
+
+function openAddModal() {
+    if (!checkAdmin || !checkAdmin()) {
+        showToast('权限不足，需要管理员权限', 'error');
+        return;
+    }
+    $('#modalTitle').text('新增物料');
+    $('#editId').val('');
+    $('#filterCode').val('');
+    $('#filterModelName').val('');
+    $('#filterSpec').val('');
+    $('#filterMaxSterilization').val('');
+    $('#filterMaxDays').val('');
+    filterModal.show();
+}
+
+function openEditModal(id) {
+    $.get('/api/filters', function(res) {
+        const item = res.find(i => i.id === id);
+        if (!item) return;
+        $('#modalTitle').text('编辑物料');
+        $('#editId').val(item.id);
+        $('#filterCode').val(item.code);
+        $('#filterModelName').val(item.model_name);
+        $('#filterSpec').val(item.spec || '');
+        $('#filterMaxSterilization').val(item.max_sterilization_count !== null && item.max_sterilization_count !== undefined ? item.max_sterilization_count : '');
+        $('#filterMaxDays').val(item.max_days !== null && item.max_days !== undefined ? (item.max_days / 365).toFixed(1) : '');
+        filterModal.show();
+    });
+}
+
+function saveFilter() {
+    const id = $('#editId').val();
+    const data = {
+        code: $('#filterCode').val().trim(),
+        model_name: $('#filterModelName').val().trim(),
+        spec: $('#filterSpec').val().trim(),
+        max_sterilization_count: $('#filterMaxSterilization').val(),
+        max_days: $('#filterMaxDays').val()
+    };
+    if (!data.code) { showToast('请输入物料编码', 'error'); return; }
+    if (!data.model_name) { showToast('请输入型号', 'error'); return; }
+
+    // 有效期从年转换为天
+    if (data.max_days) {
+        data.max_days = Math.round(parseFloat(data.max_days) * 365);
+    }
+
+    const url = id ? `/api/filters/${id}` : '/api/filters';
+    const method = id ? 'PUT' : 'POST';
+
+    $.ajax({
+        url: url,
+        type: method,
+        contentType: 'application/json',
+        data: JSON.stringify(data),
+        success: function(res) {
+            if (res.success) {
+                showToast(id ? '修改成功' : '新增成功');
+                filterModal.hide();
+                loadFilters();
+            } else {
+                showToast(res.message, 'error');
+            }
+        },
+        error: function(xhr) {
+            const msg = xhr.responseJSON ? xhr.responseJSON.message : '操作失败';
+            showToast(msg, 'error');
+        }
+    });
+}
+
+function deleteFilter(id) {
+    if (!checkAdmin || !checkAdmin()) {
+        showToast('权限不足，需要管理员权限', 'error');
+        return;
+    }
+    confirmDialog('确认删除此物料？相关记录也将被删除。', function() {
+        $.ajax({
+            url: `/api/filters/${id}`,
+            type: 'DELETE',
+            success: function(res) {
+                if (res.success) {
+                    showToast('删除成功');
+                    loadFilters();
+                } else {
+                    showToast(res.message, 'error');
+                }
+            },
+            error: function() { showToast('删除失败', 'error'); }
+        });
+    });
+}
+
+function exportFilters() {
+    window.open('/api/export/filters', '_blank');
+}
+
+function importFilterModels() {
+    if (!checkAdmin || !checkAdmin()) {
+        showToast('权限不足，需要管理员权限', 'error');
+        return;
+    }
+    $('#importFile').val('');
+    importModal.show();
+}
+
+function doImportFilterModels() {
+    const fileInput = document.getElementById('importFile');
+    const file = fileInput.files[0];
+    if (!file) {
+        showToast('请选择要导入的 Excel 文件', 'error');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const btn = $(event.target);
+    btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> 导入中...');
+
+    $.ajax({
+        url: '/api/import/filter_models',
+        type: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        success: function(res) {
+            if (res.success) {
+                showToast(res.message);
+                importModal.hide();
+                loadModels().then(loadFilters);
+            } else {
+                showToast(res.message, 'error');
+            }
+        },
+        error: function(xhr) {
+            const msg = xhr.responseJSON ? xhr.responseJSON.message : '导入失败';
+            showToast(msg, 'error');
+        },
+        complete: function() {
+            btn.prop('disabled', false).html('<i class="bi bi-file-earmark-arrow-up"></i> 开始导入');
+        }
+    });
+}
+</script>
+{% endblock %}

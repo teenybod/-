@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}物料更换管理系统{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --sidebar-width: 240px;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f5f7fa;
+        }
+        .sidebar {
+            width: var(--sidebar-width);
+            min-height: 100vh;
+            background: linear-gradient(180deg, #1a237e 0%, #283593 100%);
+            color: white;
+            position: fixed;
+            left: 0;
+            top: 0;
+            z-index: 1000;
+            transition: all 0.3s;
+        }
+        .sidebar .brand {
+            padding: 20px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .sidebar .nav-link {
+            color: rgba(255,255,255,0.85);
+            padding: 12px 20px;
+            border-radius: 0;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .sidebar .nav-link i {
+            width: 24px;
+            text-align: center;
+            font-size: 1.1rem;
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .sidebar .nav-link:hover,
+        .sidebar .nav-link.active {
+            background: rgba(255,255,255,0.15);
+            color: white;
+        }
+        .main-content {
+            margin-left: var(--sidebar-width);
+            padding: 24px;
+            min-height: 100vh;
+        }
+        .card {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+        }
+        .stat-card {
+            border-left: 4px solid;
+        }
+        .stat-card.normal { border-color: #28a745; }
+        .stat-card.warning { border-color: #ffc107; }
+        .stat-card.expired { border-color: #dc3545; }
+        .stat-card.info { border-color: #17a2b8; }
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        .status-normal { background: #d4edda; color: #155724; }
+        .status-warning { background: #fff3cd; color: #856404; }
+        .status-expired { background: #f8d7da; color: #721c24; }
+        .btn-action {
+            padding: 4px 10px;
+            font-size: 0.8rem;
+        }
+        .table thead th {
+            background: #e9ecef;
+            font-weight: 600;
+            border-bottom: 2px solid #dee2e6;
+        }
+        .filter-row:hover {
+            background-color: #f8f9fa;
+        }
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+            .sidebar.show {
+                transform: translateX(0);
+            }
+            .main-content {
+                margin-left: 0;
+            }
+        }
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+        }
+        .user-info {
+            padding: 12px 20px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            font-size: 0.85rem;
+            color: rgba(255,255,255,0.7);
+        }
+        .user-info .role-badge {
+            font-size: 0.7rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: rgba(255,255,255,0.2);
+            margin-left: 6px;
+        }
+        .admin-only, .admin-only-btn {
+            display: none;
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- 侧边栏 -->
+    <nav class="sidebar d-flex flex-column">
+        <div class="brand">
+            <i class="bi bi-funnel-fill"></i> 物料效期管理系统
+        </div>
+        <div class="nav flex-column mt-2 flex-grow-1">
+            <a class="nav-link {% if request.path == '/' %}active{% endif %}" href="/">
+                <i class="bi bi-speedometer2"></i> 预警看板
+            </a>
+            <a class="nav-link {% if request.path == '/filters' %}active{% endif %}" href="/filters">
+                <i class="bi bi-funnel"></i> 数据库
+            </a>
+            <a class="nav-link {% if request.path == '/models' %}active{% endif %}" href="/models">
+                <i class="bi bi-layers"></i> 使用管理
+            </a>
+            <a class="nav-link admin-only {% if request.path == '/settings' %}active{% endif %}" href="/settings">
+                <i class="bi bi-sliders"></i> 系统设置
+            </a>
+        </div>
+        <div class="user-info">
+            <div class="d-flex align-items-center justify-content-between">
+                <span><i class="bi bi-person-circle"></i> <span id="userName">加载中...</span></span>
+                <span class="role-badge" id="userRole"></span>
+            </div>
+            <a href="javascript:void(0)" onclick="logout()" class="text-white-50 text-decoration-none small">
+                <i class="bi bi-box-arrow-right"></i> 退出登录
+            </a>
+        </div>
+        <div class="p-3 text-white-50 small">
+            制药车间专用 v1.1
+        </div>
+    </nav>
+
+    <!-- 主内容区 -->
+    <div class="main-content">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h4 class="mb-0">{% block page_title %}预警看板{% endblock %}</h4>
+            <button class="btn btn-outline-primary btn-sm d-md-none" onclick="document.querySelector('.sidebar').classList.toggle('show')">
+                <i class="bi bi-list"></i> 菜单
+            </button>
+        </div>
+        {% block content %}{% endblock %}
+    </div>
+
+    <!-- Toast 通知 -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script>
+        let currentUser = null;
+
+        function showToast(message, type = 'success') {
+            const icon = type === 'success' ? 'bi-check-circle-fill' : (type === 'error' ? 'bi-x-circle-fill' : 'bi-info-circle-fill');
+            const bgClass = type === 'success' ? 'bg-success' : (type === 'error' ? 'bg-danger' : 'bg-info');
+            const toast = $(`
+                <div class="toast align-items-center text-white ${bgClass} border-0" role="alert">
+                    <div class="d-flex">
+                        <div class="toast-body"><i class="bi ${icon}"></i> ${message}</div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                    </div>
+                </div>
+            `);
+            $('#toastContainer').append(toast);
+            const bsToast = new bootstrap.Toast(toast[0], { delay: 3000 });
+            bsToast.show();
+            toast.on('hidden.bs.toast', () => toast.remove());
+        }
+
+        function confirmDialog(message, callback) {
+            if (confirm(message)) callback();
+        }
+
+        function logout() {
+            if (confirm('确定要退出登录吗？')) {
+                $.get('/logout', function() {
+                    window.location.href = '/login';
+                });
+            }
+        }
+
+        function loadUserInfo() {
+            $.get('/api/me').done(function(res) {
+                currentUser = res;
+                $('#userName').text(res.real_name || res.username);
+                $('#userRole').text(res.role === 'admin' ? '管理员' : '操作员');
+                if (res.role === 'admin') {
+                    $('.admin-only').show();
+                    $('.admin-only-btn').show();
+                } else {
+                    $('.admin-only').hide();
+                    $('.admin-only-btn').hide();
+                }
+            }).fail(function() {
+                window.location.href = '/login';
+            });
+        }
+
+        function checkAdmin() {
+            return currentUser && currentUser.role === 'admin';
+        }
+
+        $(document).ready(function() {
+            loadUserInfo();
+        });
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

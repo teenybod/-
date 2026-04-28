@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+{% block title %}报表统计 - 物料效期管理系统{% endblock %}
+{% block page_title %}报表统计{% endblock %}
+
+{% block content %}
+<div class="row g-3 mb-4">
+    <div class="col-md-3 col-6">
+        <div class="card stat-card info p-3">
+            <div class="text-muted small">物料总数</div>
+            <div class="fs-2 fw-bold" id="rTotal">0</div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card stat-card normal p-3">
+            <div class="text-muted small">正常</div>
+            <div class="fs-2 fw-bold text-success" id="rNormal">0</div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card stat-card warning p-3">
+            <div class="text-muted small">即将到期</div>
+            <div class="fs-2 fw-bold text-warning" id="rWarning">0</div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card stat-card expired p-3">
+            <div class="text-muted small">需更换</div>
+            <div class="fs-2 fw-bold text-danger" id="rExpired">0</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-activity"></i> 近30天动态
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-4">
+                        <div class="fs-3 fw-bold text-primary" id="actUsage">0</div>
+                        <div class="text-muted small">使用登记</div>
+                    </div>
+                    <div class="col-4">
+                        <div class="fs-3 fw-bold text-info" id="actSterilization">0</div>
+                        <div class="text-muted small">灭菌登记</div>
+                    </div>
+                    <div class="col-4">
+                        <div class="fs-3 fw-bold text-success" id="actReplacement">0</div>
+                        <div class="text-muted small">物料更换</div>
+                    </div>
+                </div>
+                <hr>
+                <div class="row text-center">
+                    <div class="col-6">
+                        <div class="fs-4 fw-bold text-dark" id="avgUsage">0</div>
+                        <div class="text-muted small">平均使用次数（更换前）</div>
+                    </div>
+                    <div class="col-6">
+                        <div class="fs-4 fw-bold text-dark" id="avgSterilization">0</div>
+                        <div class="text-muted small">平均灭菌次数（更换前）</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-building"></i> 按工序分布
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>工序</th>
+                                <th>总数</th>
+                                <th>正常</th>
+                                <th>预警</th>
+                                <th>需更换</th>
+                            </tr>
+                        </thead>
+                        <tbody id="processStatsBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mt-2">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-graph-up"></i> 近12个月趋势
+            </div>
+            <div class="card-body">
+                <canvas id="trendChart" height="80"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+let trendChart = null;
+
+$(document).ready(function() {
+    loadSummary();
+    loadMonthly();
+});
+
+function loadSummary() {
+    $.get('/api/reports/summary', function(res) {
+        $('#rTotal').text(res.overview.total);
+        $('#rNormal').text(res.overview.normal);
+        $('#rWarning').text(res.overview.warning);
+        $('#rExpired').text(res.overview.expired);
+        
+        $('#actUsage').text(res.activity_30d.usage);
+        $('#actSterilization').text(res.activity_30d.sterilization);
+        $('#actReplacement').text(res.activity_30d.replacement);
+        
+        $('#avgUsage').text(res.replacement_avg.avg_usage_count);
+        $('#avgSterilization').text(res.replacement_avg.avg_sterilization_count);
+        
+        const tbody = $('#processStatsBody');
+        tbody.empty();
+        if (res.process_stats.length === 0) {
+            tbody.append('<tr><td colspan="5" class="text-center text-muted py-4">暂无数据</td></tr>');
+            return;
+        }
+        res.process_stats.forEach(p => {
+            tbody.append(`
+                <tr>
+                    <td><strong>${p.process_name}</strong></td>
+                    <td>${p.total}</td>
+                    <td class="text-success">${p.normal}</td>
+                    <td class="text-warning">${p.warning}</td>
+                    <td class="text-danger">${p.expired}</td>
+                </tr>
+            `);
+        });
+    });
+}
+
+function loadMonthly() {
+    $.get('/api/reports/monthly', function(res) {
+        const labels = res.map(i => i.month);
+        const usageData = res.map(i => i.usage);
+        const sterilizationData = res.map(i => i.sterilization);
+        const replacementData = res.map(i => i.replacement);
+        
+        const ctx = document.getElementById('trendChart').getContext('2d');
+        if (trendChart) trendChart.destroy();
+        
+        trendChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: '使用登记',
+                        data: usageData,
+                        backgroundColor: 'rgba(13, 110, 253, 0.7)',
+                        borderColor: 'rgba(13, 110, 253, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: '灭菌登记',
+                        data: sterilizationData,
+                        backgroundColor: 'rgba(13, 202, 240, 0.7)',
+                        borderColor: 'rgba(13, 202, 240, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: '物料更换',
+                        data: replacementData,
+                        backgroundColor: 'rgba(25, 135, 84, 0.7)',
+                        borderColor: 'rgba(25, 135, 84, 1)',
+                        borderWidth: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: { beginAtZero: true, ticks: { stepSize: 1 } }
+                },
+                plugins: {
+                    legend: { position: 'top' }
+                }
+            }
+        });
+    });
+}
+</script>
+{% endblock %}

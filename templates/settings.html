@@ -1,0 +1,493 @@
+{% extends "base.html" %}
+{% block title %}系统设置 - 物料效期管理系统{% endblock %}
+{% block page_title %}系统设置{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <i class="bi bi-send-fill"></i> 飞书消息推送配置
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">飞书群机器人 Webhook 地址</label>
+                    <input type="text" class="form-control" id="feishuWebhook" placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/xxxx">
+                    <div class="form-text">
+                        在飞书群设置中添加「自定义机器人」，复制 Webhook 地址填入此处。<br>
+                        <a href="https://open.feishu.cn/document/client-docs/bot-v3/add-custom-bot" target="_blank">如何获取？查看飞书官方文档</a>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <button class="btn btn-outline-primary" onclick="testFeishu()">
+                        <i class="bi bi-bell"></i> 发送测试消息
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header bg-secondary text-white">
+                <i class="bi bi-qr-code-scan"></i> 飞书扫码登录配置
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">飞书应用 App ID</label>
+                    <input type="text" class="form-control" id="feishuAppId" placeholder="cli_xxxxxxx">
+                    <div class="form-text">在飞书开放平台创建企业自建应用后获取的 App ID</div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">飞书应用 App Secret</label>
+                    <input type="password" class="form-control" id="feishuAppSecret" placeholder="输入 App Secret">
+                    <div class="form-text">用于服务器端调用飞书接口获取用户身份</div>
+                </div>
+                <div class="alert alert-light small mb-0">
+                    <i class="bi bi-info-circle"></i> 
+                    配置后，登录页面将支持飞书扫码登录。未绑定的飞书用户首次扫码会自动创建账号（角色为操作员）。
+                    <a href="https://open.feishu.cn/document/home/develop-a-gadget-in-5-minutes/create-app" target="_blank">如何创建应用？</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header bg-success text-white">
+                <i class="bi bi-table"></i> 飞书多维表格同步配置
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">多维表格 App Token</label>
+                    <input type="text" class="form-control" id="feishuBitableAppToken" placeholder="QCzNbzd0Oa5NUfsYU6OcS4D1n6b">
+                    <div class="form-text">
+                        从多维表格链接中复制 base/ 后面的一串字符。例如链接 https://xxx.feishu.cn/base/ABC?from=from_copylink 中，App Token 为 ABC。
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">表格 ID（可选）</label>
+                    <input type="text" class="form-control" id="feishuBitableTableId" placeholder="留空则自动检测第一个表格">
+                    <div class="form-text">如果多维表格中有多个表格，可填写指定表格的 ID；留空则自动使用第一个表格。</div>
+                </div>
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="feishuBitableSyncEnabled">
+                            <label class="form-check-label" for="feishuBitableSyncEnabled">启用自动同步</label>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">同步间隔（分钟）</label>
+                        <input type="number" class="form-control" id="feishuBitableSyncInterval" min="1" max="1440" value="5">
+                        <div class="form-text">系统每隔多久自动从飞书拉取一次数据</div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <button class="btn btn-outline-success me-2" onclick="testBitableConnection()">
+                        <i class="bi bi-wifi"></i> 测试连接
+                    </button>
+                    <button class="btn btn-primary" onclick="manualSyncBitable()">
+                        <i class="bi bi-arrow-repeat"></i> 立即同步
+                    </button>
+                </div>
+                <div id="bitableTestResult" class="alert alert-light small mb-0 d-none"></div>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white">
+                <i class="bi bi-sliders"></i> 预警阈值设置
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">有效期提前提醒（天）</label>
+                        <input type="number" class="form-control" id="alertDays" min="1" max="90" value="7">
+                        <div class="form-text">到期前多少天开始提醒</div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">剩余灭菌次数预警</label>
+                        <input type="number" class="form-control" id="alertSterilizationRemaining" min="0" max="50" step="1" value="0">
+                        <div class="form-text">剩余多少次灭菌时开始提醒（0表示不预警）</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-4 admin-only" style="display:none">
+            <div class="card-header bg-success text-white">
+                <i class="bi bi-clock"></i> 定时自动推送
+            </div>
+            <div class="card-body">
+                <div class="row align-items-end">
+                    <div class="col-md-3 mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="alertPushEnabled">
+                            <label class="form-check-label" for="alertPushEnabled">启用全局预警自动推送</label>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">推送时间</label>
+                        <input type="time" class="form-control" id="alertPushTime" value="08:00">
+                        <div class="form-text">每天定时推送全局预警看板到飞书</div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">推送人员</label>
+                        <input type="text" class="form-control" id="alertPushReceivers" placeholder="多个用逗号分隔">
+                        <div class="form-text">填写飞书联系人姓名，多个用逗号分隔，消息中会标注接收人</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex gap-2 admin-only" style="display:none">
+            <button class="btn btn-primary btn-lg" onclick="saveSettings()">
+                <i class="bi bi-save"></i> 保存设置
+            </button>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-question-circle"></i> 使用帮助
+            </div>
+            <div class="card-body">
+                <h6>飞书推送设置步骤：</h6>
+                <ol class="small text-muted">
+                    <li>打开需要接收提醒的飞书群</li>
+                    <li>点击群设置 → 群机器人 → 添加机器人</li>
+                    <li>选择「自定义机器人」，按提示完成创建</li>
+                    <li>复制 Webhook 地址，粘贴到左侧输入框</li>
+                    <li>点击「发送测试消息」验证是否正常</li>
+                </ol>
+                <hr>
+                <h6>预警规则说明：</h6>
+                <ul class="small text-muted">
+                    <li><strong>🔴 需更换：</strong>任一指标已达上限</li>
+                    <li><strong>🟡 即将到期：</strong>达到预警阈值但未达上限</li>
+                    <li><strong>🟢 正常：</strong>所有指标均在安全范围内</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="card admin-only" style="display:none">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-people"></i> 用户管理</span>
+                <button class="btn btn-sm btn-primary" onclick="openUserModal()">
+                    <i class="bi bi-plus-lg"></i> 新增用户
+                </button>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>用户名</th>
+                                <th>姓名</th>
+                                <th>角色</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="userTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 用户模态框 -->
+<div class="modal fade" id="userModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="userModalTitle">新增用户</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="userEditId">
+                <div class="mb-3">
+                    <label class="form-label">用户名 <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="userUsername" placeholder="登录用户名">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">姓名</label>
+                    <input type="text" class="form-control" id="userRealName" placeholder="显示名称">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">角色 <span class="text-danger">*</span></label>
+                    <select class="form-select" id="userRole">
+                        <option value="operator">操作员</option>
+                        <option value="admin">管理员</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">密码 <span class="text-danger" id="pwdRequired">*</span></label>
+                    <input type="text" class="form-control" id="userPassword" placeholder="默认 123456">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="saveUser()">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let userModal;
+$(document).ready(function() {
+    userModal = new bootstrap.Modal(document.getElementById('userModal'));
+    loadSettings();
+    loadUsers();
+});
+
+function loadSettings() {
+    $.get('/api/settings', function(res) {
+        $('#feishuWebhook').val(res.feishu_webhook || '');
+        $('#feishuAppId').val(res.feishu_app_id || '');
+        $('#feishuAppSecret').val(res.feishu_app_secret || '');
+        $('#alertDays').val(res.alert_days || 7);
+        $('#alertSterilizationRemaining').val(res.alert_sterilization_remaining || 0);
+        $('#alertPushEnabled').prop('checked', res.alert_push_enabled || false);
+        $('#alertPushTime').val(res.alert_push_time || '08:00');
+        $('#alertPushReceivers').val(res.alert_push_receivers || '');
+        $('#feishuBitableAppToken').val(res.feishu_bitable_app_token || '');
+        $('#feishuBitableTableId').val(res.feishu_bitable_table_id || '');
+        $('#feishuBitableSyncEnabled').prop('checked', res.feishu_bitable_sync_enabled || false);
+        $('#feishuBitableSyncInterval').val(res.feishu_bitable_sync_interval || 5);
+    });
+}
+
+function saveSettings() {
+    const data = {
+        feishu_webhook: $('#feishuWebhook').val().trim(),
+        feishu_app_id: $('#feishuAppId').val().trim(),
+        feishu_app_secret: $('#feishuAppSecret').val().trim(),
+        alert_days: parseInt($('#alertDays').val()),
+        alert_sterilization_remaining: parseInt($('#alertSterilizationRemaining').val()),
+        alert_push_enabled: $('#alertPushEnabled').is(':checked'),
+        alert_push_time: $('#alertPushTime').val(),
+        alert_push_receivers: $('#alertPushReceivers').val().trim(),
+        feishu_bitable_app_token: $('#feishuBitableAppToken').val().trim(),
+        feishu_bitable_table_id: $('#feishuBitableTableId').val().trim(),
+        feishu_bitable_sync_enabled: $('#feishuBitableSyncEnabled').is(':checked'),
+        feishu_bitable_sync_interval: parseInt($('#feishuBitableSyncInterval').val()) || 5
+    };
+
+    $.ajax({
+        url: '/api/settings',
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(data),
+        success: function(res) {
+            if (res.success) {
+                showToast('设置保存成功');
+            } else {
+                showToast(res.message, 'error');
+            }
+        },
+        error: function(xhr) {
+            const msg = xhr.responseJSON ? xhr.responseJSON.message : '保存失败';
+            showToast(msg, 'error');
+        }
+    });
+}
+
+function testBitableConnection() {
+    const appToken = $('#feishuBitableAppToken').val().trim();
+    if (!appToken) { showToast('请先填写多维表格 App Token', 'error'); return; }
+    const btn = event.target.closest('button');
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 测试中...';
+
+    $.ajax({
+        url: '/api/feishu/bitable/test',
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({}),
+        success: function(res) {
+            const resultDiv = $('#bitableTestResult');
+            resultDiv.removeClass('d-none');
+            if (res.success) {
+                resultDiv.removeClass('alert-danger').addClass('alert-success');
+                resultDiv.html('<i class="bi bi-check-circle"></i> 连接成功！检测到表格：<b>' + (res.tables.map(t => t.name).join(', ')) + '</b>；当前使用的表格 ID：<code>' + res.current_table_id + '</code>');
+                showToast('连接成功');
+            } else {
+                resultDiv.removeClass('alert-success').addClass('alert-danger');
+                resultDiv.html('<i class="bi bi-x-circle"></i> ' + (res.message || '连接失败'));
+                showToast(res.message || '连接失败', 'error');
+            }
+        },
+        error: function(xhr) {
+            const msg = xhr.responseJSON ? xhr.responseJSON.message : '测试失败';
+            const resultDiv = $('#bitableTestResult');
+            resultDiv.removeClass('d-none alert-success').addClass('alert-danger');
+            resultDiv.html('<i class="bi bi-x-circle"></i> ' + msg);
+            showToast(msg, 'error');
+        },
+        complete: function() {
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+        }
+    });
+}
+
+function manualSyncBitable() {
+    const btn = event.target.closest('button');
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 同步中...';
+
+    $.ajax({
+        url: '/api/feishu/bitable/sync',
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({}),
+        success: function(res) {
+            if (res.success) {
+                showToast(res.message);
+            } else {
+                showToast(res.message, 'error');
+            }
+        },
+        error: function(xhr) {
+            const msg = xhr.responseJSON ? xhr.responseJSON.message : '同步失败';
+            showToast(msg, 'error');
+        },
+        complete: function() {
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+        }
+    });
+}
+
+function testFeishu() {
+    const webhook = $('#feishuWebhook').val().trim();
+    if (!webhook) { showToast('请先填写 Webhook 地址', 'error'); return; }
+    saveSettings();
+    const btn = event.target.closest('button');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 发送中...';
+
+    $.ajax({
+        url: '/api/send_feishu',
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ only_alert: false }),
+        success: function(res) {
+            if (res.success) {
+                showToast('测试消息已发送，请查看飞书群');
+            } else {
+                showToast(res.message, 'error');
+            }
+        },
+        error: function(xhr) {
+            const msg = xhr.responseJSON ? xhr.responseJSON.message : '发送失败';
+            showToast(msg, 'error');
+        },
+        complete: function() {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-bell"></i> 发送测试消息';
+        }
+    });
+}
+
+function loadUsers() {
+    $.get('/api/users', function(res) {
+        const tbody = $('#userTableBody');
+        tbody.empty();
+        res.forEach(u => {
+            const roleText = u.role === 'admin' ? '管理员' : '操作员';
+            tbody.append(`
+                <tr>
+                    <td>${u.username}</td>
+                    <td>${u.real_name || '-'}</td>
+                    <td>${roleText}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary" onclick="editUser(${u.id}, '${u.username}', '${u.real_name || ''}', '${u.role}')">编辑</button>
+                        ${u.username !== 'admin' ? `<button class="btn btn-sm btn-outline-danger" onclick="deleteUser(${u.id})">删除</button>` : ''}
+                    </td>
+                </tr>
+            `);
+        });
+    });
+}
+
+function openUserModal() {
+    $('#userModalTitle').text('新增用户');
+    $('#userEditId').val('');
+    $('#userUsername').val('').prop('readonly', false);
+    $('#userRealName').val('');
+    $('#userRole').val('operator');
+    $('#userPassword').val('');
+    $('#pwdRequired').show();
+    userModal.show();
+}
+
+function editUser(id, username, realName, role) {
+    $('#userModalTitle').text('编辑用户');
+    $('#userEditId').val(id);
+    $('#userUsername').val(username).prop('readonly', true);
+    $('#userRealName').val(realName);
+    $('#userRole').val(role);
+    $('#userPassword').val('');
+    $('#pwdRequired').hide();
+    userModal.show();
+}
+
+function saveUser() {
+    const id = $('#userEditId').val();
+    const data = {
+        username: $('#userUsername').val().trim(),
+        real_name: $('#userRealName').val().trim(),
+        role: $('#userRole').val(),
+        password: $('#userPassword').val()
+    };
+    if (!data.username) { showToast('请输入用户名', 'error'); return; }
+    if (!id && !data.password) { showToast('请输入密码', 'error'); return; }
+
+    const url = id ? `/api/users/${id}` : '/api/users';
+    const method = id ? 'PUT' : 'POST';
+
+    $.ajax({
+        url: url,
+        type: method,
+        contentType: 'application/json',
+        data: JSON.stringify(data),
+        success: function(res) {
+            if (res.success) {
+                showToast(id ? '修改成功' : '新增成功');
+                userModal.hide();
+                loadUsers();
+            } else {
+                showToast(res.message, 'error');
+            }
+        },
+        error: function(xhr) {
+            const msg = xhr.responseJSON ? xhr.responseJSON.message : '操作失败';
+            showToast(msg, 'error');
+        }
+    });
+}
+
+function deleteUser(id) {
+    confirmDialog('确认删除此用户？', function() {
+        $.ajax({
+            url: `/api/users/${id}`,
+            type: 'DELETE',
+            success: function(res) {
+                if (res.success) {
+                    showToast('删除成功');
+                    loadUsers();
+                } else {
+                    showToast(res.message, 'error');
+                }
+            },
+            error: function() { showToast('删除失败', 'error'); }
+        });
+    });
+}
+</script>
+{% endblock %}
