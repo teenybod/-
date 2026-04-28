@@ -18,12 +18,22 @@ from models import (
 
 app = Flask(__name__)
 
-# Vercel Serverless 适配：Vercel 文件系统只读，数据库只能放在 /tmp
+# 环境检测
 is_vercel = os.environ.get('VERCEL') == '1' or os.environ.get('VERCEL_ENV') is not None
-if is_vercel:
+
+# 数据库配置：优先使用环境变量 DATABASE_URL（PostgreSQL / MySQL / SQLite）
+db_url = os.environ.get('DATABASE_URL')
+if db_url:
+    # 部分平台（如 Supabase/Heroku）使用 postgres:// 前缀，SQLAlchemy 需要 postgresql://
+    if db_url.startswith('postgres://'):
+        db_url = db_url.replace('postgres://', 'postgresql://', 1)
+    app.config['SQLALCHEMY_DATABASE_URI'] = db_url
+elif is_vercel:
+    # Vercel 无外部数据库时的降级方案（数据不持久，仅供演示）
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////tmp/filter_mgmt.db'
 else:
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///filter_mgmt.db')
+    # 本地开发默认使用 SQLite
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///filter_mgmt.db'
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['JSON_AS_ASCII'] = False
