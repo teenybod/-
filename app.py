@@ -17,7 +17,14 @@ from models import (
 )
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///filter_mgmt.db')
+
+# Vercel Serverless 适配：Vercel 文件系统只读，数据库只能放在 /tmp
+is_vercel = os.environ.get('VERCEL') == '1' or os.environ.get('VERCEL_ENV') is not None
+if is_vercel:
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////tmp/filter_mgmt.db'
+else:
+    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///filter_mgmt.db')
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['JSON_AS_ASCII'] = False
 app.secret_key = os.environ.get('SECRET_KEY', 'filter_mgmt_secret_key_2024')
@@ -153,8 +160,10 @@ def auto_push_usage_alerts():
             pass
 
 
-scheduler.add_job(auto_push_usage_alerts, 'cron', hour='8,20', minute='0')
-scheduler.start()
+# Serverless 环境（如 Vercel）不支持常驻后台任务，只在传统服务器上启动定时器
+if not is_vercel:
+    scheduler.add_job(auto_push_usage_alerts, 'cron', hour='8,20', minute='0')
+    scheduler.start()
 
 # ==================== 初始化数据 ====================
 
@@ -1291,6 +1300,10 @@ _bitable_sync_job_id = 'feishu_bitable_sync'
 
 def _reschedule_bitable_sync():
     """根据配置重新调度飞书多维表格同步任务"""
+    # Serverless 环境不支持常驻后台任务
+    if is_vercel:
+        return
+
     cfg = Config.query.first()
     interval = cfg.feishu_bitable_sync_interval if cfg else 5
     enabled = cfg.feishu_bitable_sync_enabled if cfg else False
