@@ -547,7 +547,12 @@ def feishu_auth_url():
         return jsonify({'success': False, 'message': '未配置飞书应用 ID'}), 400
 
     state = str(uuid.uuid4()).replace('-', '')
-    redirect_uri = request.url_root.rstrip('/') + '/feishu/callback'
+    # 优先使用环境变量 BASE_URL（解决反向代理下地址检测错误问题）
+    base_url = os.environ.get('BASE_URL', '').rstrip('/')
+    if base_url:
+        redirect_uri = base_url + '/feishu/callback'
+    else:
+        redirect_uri = request.url_root.rstrip('/') + '/feishu/callback'
     auth_url = (
         f"https://open.feishu.cn/open-apis/authen/v1/index"
         f"?app_id={cfg.feishu_app_id}"
